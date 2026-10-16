@@ -1,0 +1,19 @@
+// 插件仓库:legacyforge 来自 NeoForged maven(与 TD 仓库同配方,缓存已热)
+pluginManagement {
+    repositories {
+        gradlePluginPortal()
+        exclusiveContent {
+            forRepository {
+                maven {
+                    name = 'NeoForged'
+                    url = uri('https://maven.neoforged.net/releases')
+                }
+            }
+            filter {
+                includeGroupAndSubgroups('net.neoforged')
+            }
+        }
+    }
+}
+
+rootProject.name = 'vs2-sentinel-fix'

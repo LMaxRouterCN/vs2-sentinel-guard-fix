@@ -1,0 +1,16 @@
+# Gradle
+.gradle/
+build/
+
+# IDE
+.idea/
+*.iml
+.vscode/
+.settings/
+
+# 运行时产物(如启用 runClient)
+run/
+logs/
+
+# 系统
+Thumbs.db

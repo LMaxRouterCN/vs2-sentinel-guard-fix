@@ -1,0 +1,59 @@
+plugins {
+    // 与 TD 仓库同栈:ModDevGradle legacyforge(本机缓存已热,冷启动短)
+    // 作用:拉起 Forge 1.20.1 官方映射开发环境 + 提供 reobfJar(产物重映射到 SRG,生产运行时用)
+    id 'net.neoforged.moddev.legacyforge' version '2.0.77'
+}
+
+group = 'com.lmaxrouter'
+version = '1.0.0'
+base { archivesName = 'vs2-sentinel-fix' }
+
+java {
+    // MC 1.20.1 Forge = Java 17
+    toolchain.languageVersion = JavaLanguageVersion.of(17)
+}
+
+repositories {
+    mavenCentral()
+    // Mixin 注解处理器只在 sponge 仓库
+    exclusiveContent {
+        forRepository {
+            maven {
+                name = 'Sponge'
+                url = uri('https://repo.spongepowered.org/repository/maven-public')
+            }
+        }
+        filter {
+            includeGroupAndSubgroups('org.spongepowered')
+        }
+    }
+}
+
+legacyForge {
+    // 构建用 Forge 1.20.1-47.4.10(TD 同款,缓存热);
+    // 方法级 SRG 名在整个 1.20.1 系列一致,与用户实例 47.4.x 运行时兼容
+    version = '1.20.1-47.4.10'
+}
+
+dependencies {
+    // Mixin AP:编译期生成 refmap(Mojang 方法名 -> SRG 的映射表,运行时 mixin 靠它定位目标)
+    annotationProcessor 'org.spongepowered:mixin:0.8.5-SNAPSHOT:processor'
+}
+
+mixin {
+    // refmap 由 Mixin AP 自动生成,打进 jar 根目录
+    add(sourceSets.main, 'vs2sentinelfix.refmap.json')
+    // mixin 配置注册(moddev 会写入 jar manifest 的 MixinConfigs)
+    config 'vs2sentinelfix.mixins.json'
+}
+
+// 先出常规 jar,再 reobfJar 把字节码里的 Mojang 名重映射到 SRG:
+// 生产环境 Forge 1.20.1 运行时方法名是 SRG(如 getMinBuildHeight -> m_141937_)
+// refmap 只覆盖 mixin 注解字符串;方法体内的 MC 调用必须靠 reobf
+jar {
+    finalizedBy 'reobfJar'
+    manifest {
+        // 双保险:部分 Forge 加载路径从 manifest 读 MixinConfigs
+        attributes 'MixinConfigs': 'vs2sentinelfix.mixins.json'
+    }
+}
