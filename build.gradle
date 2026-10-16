@@ -52,14 +52,17 @@ dependencies {
     // handler 方法体内的 MC 调用(getMinBuildHeight)由 reobfJar 重映射到 SRG。
     annotationProcessor 'org.spongepowered:mixin:0.8.5-SNAPSHOT:processor'
 
-    // VS2 jar:仅编译期依赖 —— 两重角色:
-    // 1) mixin AP 的目标校验要求 @Mixin targets 指向的类在编译 classpath 上
-    //    ("Mixin target could not be found",已实踩);
-    // 2) [v1.0.1] handler 全参捕获需要 org.valkyrienskies.core.api.ships.Ship
-    //    类型出现在签名里(该类由 jar 内嵌的 vs-core 提供)。
-    // 生产运行时它由实例 mods 目录提供,故 compileOnly,绝不打进产物。
-    // 目标签名已用 javap 对照 2.4.11 生产 jar 核实一致。
-    compileOnly files('libs/valkyrienskies-2.4.11.jar')
+    // libs/ 下所有 jar(外层 VS2 mod jar + 从其内部提取的 JarJar 嵌套 jar):
+    // 仅编译期依赖 —— 三重角色:
+    // 1) mixin AP 目标校验:要求 @Mixin targets 指向的类在编译 classpath 上;
+    // 2) handler 全参捕获需要 org.valkyrienskies.core.api.ships.Ship 出现在
+    //    签名里 —— 该类位于 VS2 mod jar 内嵌的 JarJar 嵌套 jar(vs-core)中,
+    //    Forge 运行时由 SecureJarHandler 挂载嵌套 jar,但 javac/AP 只看平铺
+    //    classpath 看不到嵌套 jar(已实踩:"找不到符号: 类 Ship"),
+    //    故构建前需把嵌套 jar 解出到 libs/(libs/ 已 gitignore);
+    // 3) 用 fileTree 而非逐个 files():嵌套 jar 的数量/文件名不固定。
+    // 生产运行时全部由实例 mods 目录提供,故 compileOnly,绝不打进产物。
+    compileOnly fileTree('libs') { include '*.jar' }
 }
 
 jar {
