@@ -1,17 +1,18 @@
 pluginManagement {
     repositories {
+        // 插件解析回退链(上轮 exclusiveContent 把 legacyforge 插件钉死在
+        // maven.neoforged.net,该主机当下间歇不可达;放开为顺序回退):
+        //   1) Gradle 官方门户(MDG 在门户有正式发布)
+        //   2) 阿里云 gradle-plugin 镜像(门户的 CN 镜像,快路)
+        //   3) NeoForged 官方 maven(上游真身,保底)
         gradlePluginPortal()
-        // legacyforge 插件只在此仓库(TD 同配方)
-        exclusiveContent {
-            forRepository {
-                maven {
-                    name = 'NeoForged'
-                    url = uri('https://maven.neoforged.net/releases')
-                }
-            }
-            filter {
-                includeGroupAndSubgroups('net.neoforged')
-            }
+        maven {
+            name = 'AliyunGradlePlugin'
+            url = uri('https://maven.aliyun.com/repository/gradle-plugin')
+        }
+        maven {
+            name = 'NeoForged'
+            url = uri('https://maven.neoforged.net/releases')
         }
     }
 }
