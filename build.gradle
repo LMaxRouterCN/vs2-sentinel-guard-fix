@@ -1,7 +1,10 @@
 plugins {
-    // 与 TD 仓库同栈:ModDevGradle legacyforge
-    // 职责:Forge 1.20.1 官方映射开发环境 + reobfJar(产物 Mojang->SRG 重映射)
-    id 'net.neoforged.moddev.legacyforge' version '2.0.77'
+    // ModDevGradle legacyforge。
+    // 版本选择:2.0.116 —— 本机 modules-2 缓存里已有 moddev-gradle 2.0.116 +
+    // neoform-runtime 1.0.43 + AutoRenamingTool 2.0.4 这套组合(某历史项目
+    // 在本机完整跑通过);maven.neoforged.net 当下持续不可达,选缓存版本可
+    // 将其从依赖链挤出去。2.0.77(TD 所钉)在本机零缓存,无亲和度。
+    id 'net.neoforged.moddev.legacyforge' version '2.0.116'
 }
 
 group = 'com.lmaxrouter'
@@ -10,13 +13,13 @@ base { archivesName = 'vs2-sentinel-fix' }
 
 java {
     // MC 1.20.1 Forge = Java 17;构建 JVM 本身就是 zulu-17(JAVA_HOME),
-    // 工具链自匹配当前 JVM,无需 foojay 解析器(砍掉一个网络依赖)
+    // 工具链自匹配当前 JVM,无需下载解析器
     toolchain.languageVersion = JavaLanguageVersion.of(17)
 }
 
 repositories {
     mavenCentral()
-    // mixin 注解处理器只在 Sponge maven
+    // mixin 注解处理器只在 Sponge maven(探测 OK)
     exclusiveContent {
         forRepository {
             maven {
@@ -31,27 +34,25 @@ repositories {
 }
 
 legacyForge {
-    // 与 TD 同版本;方法级 SRG 名在整个 1.20.1 系列一致,
-    // 产出 jar 兼容用户实例 47.4.x 运行时
+    // 与 TD 同 Forge 行;方法级 SRG 名在整个 1.20.1 系列一致,
+    // 产出 jar 兼容用户实例 47.4.x 运行时;素材走 maven.minecraftforge.net(探测 OK)
     version = '1.20.1-47.4.10'
 }
 
 dependencies {
     // mixin 注解处理器:编译期校验注解。
-    // 本 mod 全部 mixin 目标都是 VS2 自己的类(remap=false),
-    // 不需要 refmap(名称映射表);handler 方法体里的 MC 调用
-    // (getMinBuildHeight)由 reobfJar 重映射到 SRG。
+    // 本 mod 全部 mixin 目标都是 VS2 自己的类(remap=false),无 refmap 需求;
+    // handler 方法体内的 MC 调用(getMinBuildHeight)由 reobfJar 重映射到 SRG。
     annotationProcessor 'org.spongepowered:mixin:0.8.5-SNAPSHOT:processor'
 }
 
 jar {
-    // reobfJar(legacyforge 提供,TD 同款写法):Mojang 名 -> SRG,
+    // reobfJar(MDG legacyforge 提供,TD 同款写法):Mojang 名 -> SRG,
     // 生产 Forge 1.20.1 运行时的方法名是 SRG(如 getMinBuildHeight -> m_141937_)
     finalizedBy 'reobfJar'
     manifest {
         // Forge 加载器从 manifest 的 MixinConfigs 发现 mod 的 mixin 配置。
-        // 纯 manifest 注册,不依赖 mixin DSL —— TD 的 mixin{} DSL 疑似来自其
-        // buildSrc 自定义约定插件,来源不明,为构建链确定性直接弃用。
+        // 纯 manifest 注册,不依赖 mixin DSL(其来源不明,已弃用)。
         attributes 'MixinConfigs': 'vs2sentinelfix.mixins.json'
     }
 }
