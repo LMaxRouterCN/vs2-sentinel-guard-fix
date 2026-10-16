@@ -11,7 +11,7 @@
 
 ## 部署 / 卸载
 
-- 部署:把 build/libs/vs2-sentinel-fix-1.0.0.jar 放进 mods 目录(当前已部署一份到实例 mods)
+- 部署:把 build/libs/vs2-sentinel-fix-1.0.1.jar 放进 mods 目录(当前已部署一份到实例 mods)
 - 卸载:删除该 jar 即可,无残留
 - 版本窗口:valkyrienskies [2.4.11, 2.5) 强制依赖;窗口外 Forge 拒绝加载本 mod(required mixin 遇上游签名漂移会崩游戏,拒载更安全;上游 2.5 修复本 bug 后本 mod 光荣退役)
 
@@ -25,13 +25,18 @@
 
 哨兵钳到 (0, minY, 0):若该世界 chunk(0,0) 不在出生点常载范围,首次查询会同步加载一次 chunk(百毫秒级,一次性);此后 BiomeManager / TD 缓存命中。
 
+## 版本历史
+
+- 1.0.1:修复进世界崩溃 —— mixin @Inject handler 参数捕获是"全有或全无"规则,v1.0.0 只捕获 (Level, Vector3dc) 缺两个 Ship,运行时 mixin 应用报 Invalid descriptor(编译期 AP 0.8.5 在 remap=false 下不验 handler 元数,未拦截)。handler 改为全参捕获。
+- 1.0.0:初版守卫。
+
 ## 构建(复现)
 
 - JDK 17(E:\Java\Zulu\zulu-17),Windows
 - 前置:libs/valkyrienskies-2.4.11.jar 必须存在 —— mixin 注解处理器编译期校验 @Mixin 目标类须在 classpath(来源:实例 mods 目录里的 VS2 2.4.11 jar;compileOnly,不进产物)。libs/ 已 gitignore,克隆后需手动放置
 - 命令:.\gradlew.bat build(8.14.3 发行包已装入本机 dists 缓存;或直接用 tools\gradle-8.14.3\bin\gradle.bat)
 - 网络:插件与依赖走 Gradle 插件门户 / maven.minecraftforge.net / Sponge / Maven Central。注意:本机 maven.neoforged.net 持续不可达,故 ModDevGradle 钉在 2.0.116(本机缓存有配套 neoform-runtime 1.0.43 + AutoRenamingTool 2.0.4 + MC 1.20.1 素材全套);升级 MDG 版本前先确认该主机可达或缓存命中
-- 产物自检:javap -p -c -classpath build/libs/vs2-sentinel-fix-1.0.0.jar com.lmaxrouter.vs2sentinelfix.mixin.CompatUtilMixin —— handler 内 getMinBuildHeight 应显示为 SRG 名 m_141937_(reobfJar 重映射成功的标志)
+- 产物自检:javap -p -c -classpath build/libs/vs2-sentinel-fix-1.0.1.jar com.lmaxrouter.vs2sentinelfix.mixin.CompatUtilMixin —— handler 内 getMinBuildHeight 应显示为 SRG 名 m_141937_(reobfJar 重映射成功的标志);handler 签名应含全部 4 个目标参数
 - tools/(gradle 发行包)与 libs/ 均已 gitignore,不入库
 
 ## 案件关联

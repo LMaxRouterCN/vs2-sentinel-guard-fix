@@ -8,7 +8,8 @@ plugins {
 }
 
 group = 'com.lmaxrouter'
-version = '1.0.0'
+// v1.0.1:修复 mixin handler 参数捕获(全有或全无规则),详见 CompatUtilMixin 注释
+version = '1.0.1'
 base { archivesName = 'vs2-sentinel-fix' }
 
 java {
@@ -51,10 +52,12 @@ dependencies {
     // handler 方法体内的 MC 调用(getMinBuildHeight)由 reobfJar 重映射到 SRG。
     annotationProcessor 'org.spongepowered:mixin:0.8.5-SNAPSHOT:processor'
 
-    // VS2 jar:仅编译期依赖 —— mixin AP 的目标校验要求 @Mixin targets 指向的
-    // 类在编译 classpath 上("Mixin target could not be found",已实踩)。
+    // VS2 jar:仅编译期依赖 —— 两重角色:
+    // 1) mixin AP 的目标校验要求 @Mixin targets 指向的类在编译 classpath 上
+    //    ("Mixin target could not be found",已实踩);
+    // 2) [v1.0.1] handler 全参捕获需要 org.valkyrienskies.core.api.ships.Ship
+    //    类型出现在签名里(该类由 jar 内嵌的 vs-core 提供)。
     // 生产运行时它由实例 mods 目录提供,故 compileOnly,绝不打进产物。
-    // jar 内含全部 org.valkyrienskies.* 类(vs-core 3041 类内嵌),
     // 目标签名已用 javap 对照 2.4.11 生产 jar 核实一致。
     compileOnly files('libs/valkyrienskies-2.4.11.jar')
 }
