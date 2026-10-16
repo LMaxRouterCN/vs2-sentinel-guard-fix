@@ -9,11 +9,11 @@ displayName="VS2 Sentinel Fix"
 authors="LMaxRouterCN"
 description='''
 Fixes Valkyrien Skies 2 sentinel-coordinate biome queries: occluded ship
-blocks produce an invalid marker BlockPos that gets transformed by the
-ship matrix into a ~24M-block drifting ghost query, stalling synchronous
-BiomeSource mods (e.g. Terrain Diffusion) every tick. This mod guards the
-shared transform funnel CompatUtil.toSameSpaceAs so below-world-floor
-positions are never ship-transformed.
+blocks produce an invalid marker BlockPos that gets ship-transformed into
+a ~24M-block drifting ghost query, stalling synchronous BiomeSource mods
+(e.g. Terrain Diffusion) every tick. Guards the shared transform funnel
+CompatUtil.toSameSpaceAs so below-world-floor positions are never
+ship-transformed.
 '''
 
 [[dependencies.vs2sentinelfix]]
@@ -30,10 +30,12 @@ versionRange="[1.20.1,1.21)"
 ordering="NONE"
 side="BOTH"
 
-# 强依赖 VS2:顺序保证 + 缺失时 Forge 显式拒绝加载(而不是 mixin 静默找不到目标)
+# VS2 版本窗口:下界=受影响且已验证的 2.4.11;上界=2.5(大版本可能重构,
+# mixin 目标签名漂移会让 required=true 直接崩游戏;窗口外拒绝加载更安全,
+# 上游真在 2.5 修了本 bug 时本 mod 正好光荣退役)
 [[dependencies.vs2sentinelfix]]
 modId="valkyrienskies"
 mandatory=true
-versionRange="[2.4.11,)"
+versionRange="[2.4.11,2.5)"
 ordering="NONE"
 side="BOTH"

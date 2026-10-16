@@ -3,7 +3,6 @@
   "minVersion": "0.8",
   "package": "com.lmaxrouter.vs2sentinelfix.mixin",
   "compatibilityLevel": "JAVA_17",
-  "refmap": "vs2sentinelfix.refmap.json",
   "mixins": [
     "CompatUtilMixin"
   ],

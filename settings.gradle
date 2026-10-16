@@ -1,7 +1,7 @@
-// 插件仓库:legacyforge 来自 NeoForged maven(与 TD 仓库同配方,缓存已热)
 pluginManagement {
     repositories {
         gradlePluginPortal()
+        // legacyforge 插件只在此仓库(TD 同配方)
         exclusiveContent {
             forRepository {
                 maven {
