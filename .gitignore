@@ -18,3 +18,5 @@ tools/
 warm-help.log
 libs/
 build-output.log
+.agent/
+.agent_task_logs/
