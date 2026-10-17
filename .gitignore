@@ -13,7 +13,7 @@ run/
 logs/
 
 # 系统
-Thumbs.dbbuild-output.log
+Thumbs.db
 tools/
 warm-help.log
 libs/
