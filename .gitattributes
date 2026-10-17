@@ -1,0 +1,8 @@
+# Line-ending contract: repo stores LF uniformly
+* text=auto eol=lf
+# Windows batch must keep CRLF - cmd.exe breaks on pure-LF bats
+*.bat text eol=crlf
+# jars are zip archives, never treat as text
+*.jar binary
+# gradle wrapper jar is vendored tooling, exclude from GitHub language stats
+gradle/wrapper/gradle-wrapper.jar linguist-vendored
