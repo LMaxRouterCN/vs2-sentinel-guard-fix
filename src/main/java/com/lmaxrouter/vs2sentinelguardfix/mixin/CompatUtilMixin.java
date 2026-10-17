@@ -64,7 +64,7 @@ public abstract class CompatUtilMixin {
         at = @At("HEAD"),
         cancellable = true
     )
-    private void vs2sf$guardBelowWorldFloor(Level level, Vector3dc position, Ship shipA, Ship shipB, CallbackInfoReturnable<Vector3d> cir) {
+    private void vs2sgf$guardBelowWorldFloor(Level level, Vector3dc position, Ship shipA, Ship shipB, CallbackInfoReturnable<Vector3d> cir) {
         // 原 API 允许 level 为 null(null 时 getShipManagingPos 路径不可用),
         // 此时无法定义"世界地板",保持原行为
         if (level == null) {
