@@ -75,3 +75,61 @@ jar {
         attributes 'MixinConfigs': 'vs2sentinelguardfix.mixins.json'
     }
 }
+// ---------------------------------------------------------------------------
+// [hotfix 2026-10-17] verifyMixinConfig - 构建期 mixin 配置自洽性守卫
+// 事故:mixins.json 的 package 误写为 com.lmaxrouter..mixin(双点),声明的
+// CompatUtilMixin 在 jar 内不存在 -> 运行时 ClassNotFound -> prepare 阶段
+// FATAL,游戏无法启动。既有两道防线都看不见它:编译期 mixin AP 只校验
+// @Mixin 目标类;发布自检 javap 只验字节码签名。本任务把对账焊进 build:
+// manifest 引用的配置存在、package 形态合法(双点/空段即拒)、声明的每个
+// mixin 类在 jar 内真实存在——不自洽的 jar 无法完成构建。
+// ---------------------------------------------------------------------------
+tasks.register('verifyMixinConfig') {
+    group = 'verification'
+    description = '校验产物 jar 的 mixin 配置自洽性(MixinConfigs manifest / package 形态 / 声明类存在)'
+    doLast {
+        def libs = layout.buildDirectory.dir('libs').get().asFile
+        def files = libs.listFiles() ?: []
+        def jars = files.findAll { it.name.endsWith('.jar') && !it.name.endsWith('-sources.jar') }
+        if (!jars) throw new GradleException('verifyMixinConfig: build/libs 为空,没有可校验的产物')
+        jars.each { f ->
+            new java.util.zip.ZipFile(f).withCloseable { zip ->
+                // 1) manifest 声明的 MixinConfigs 必须真实存在于 jar(未声明 = mixin 永远不加载,同样是事故级)
+                def cfgNames = []
+                def mfEntry = zip.getEntry('META-INF/MANIFEST.MF')
+                if (mfEntry != null) {
+                    def manifest = new java.util.jar.Manifest(zip.getInputStream(mfEntry))
+                    def declared = manifest.mainAttributes.getValue('MixinConfigs')
+                    if (declared) cfgNames = declared.split(',').collect { it.trim() }.findAll { !it.empty }
+                }
+                if (cfgNames.isEmpty()) throw new GradleException("verifyMixinConfig: ${f.name} 的 manifest 未声明 MixinConfigs")
+                cfgNames.each { name ->
+                    if (zip.getEntry(name) == null) {
+                        throw new GradleException("verifyMixinConfig: manifest 声明 ${name} 但 ${f.name} 内不存在")
+                    }
+                    // 2) package 形态守卫(双点/空段 = 本次事故直接死因)
+                    def cfg = new groovy.json.JsonSlurper().parse(zip.getInputStream(zip.getEntry(name)))
+                    def pkg = cfg.package
+                    if (!(pkg instanceof String) || pkg.trim().isEmpty()) {
+                        throw new GradleException("verifyMixinConfig: ${name} 的 package 缺失")
+                    }
+                    if (pkg.contains('..') || pkg.startsWith('.') || pkg.endsWith('.')) {
+                        throw new GradleException("verifyMixinConfig: ${name} 的 package '${pkg}' 形态可疑(双点/空段)")
+                    }
+                    // 3) 声明的每个 mixin 类必须在 jar 内真实存在(mixins + client 一视同仁)
+                    def classes = (cfg.mixins ?: []) + (cfg.client ?: [])
+                    if (classes.isEmpty()) throw new GradleException("verifyMixinConfig: ${name} 未声明任何 mixin")
+                    classes.each { cls ->
+                        def path = pkg.replace('.', '/') + '/' + cls + '.class'
+                        if (zip.getEntry(path) == null) {
+                            throw new GradleException("verifyMixinConfig: ${name} 声明 ${pkg}.${cls} 但 ${path} 不在 jar 内")
+                        }
+                    }
+                    logger.lifecycle("verifyMixinConfig: ${f.name} / ${name} OK(${classes.size()} 个 mixin, package=${pkg})")
+                }
+            }
+        }
+    }
+}
+// 挂在 build 收尾:reobf 之后、任何发布动作之前
+tasks.named('build') { finalizedBy 'verifyMixinConfig' }
