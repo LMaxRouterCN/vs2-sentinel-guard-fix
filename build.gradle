@@ -8,8 +8,13 @@ plugins {
 }
 
 group = 'com.lmaxrouter'
-// 1.0.0(公版,版本重置):handler 全参捕获规则继承自内测 v1.0.1 修复,详见 CompatUtilMixin 注释
-version = '1.0.0'
+// [v1.0.1 公版热修复] 修复 v1.0.0 mixins.json package 双点 typo(见 commit 35d0371)。
+// 历史:v1.0.0 为公版版本重置,handler 全参捕获规则继承自内测 v1.0.1,详见 CompatUtilMixin 注释。
+// modVersion/mcVersion 为版本与文件名契约的单一事实源:modVersion=mod 语义版本(mods.toml 内 version 需与此同步);
+// mcVersion=目标 MC 版本,进发布文件名(legacyForge.version 为完整 Forge 坐标,互不替代)。
+def modVersion = '1.0.1'
+def mcVersion = '1.20.1'
+version = modVersion
 base { archivesName = 'vs2-sentinel-guard-fix' }
 
 java {
@@ -69,11 +74,28 @@ jar {
     // reobfJar(MDG legacyforge 提供,TD 同款写法):Mojang 名 -> SRG,
     // 生产 Forge 1.20.1 运行时的方法名是 SRG(如 getMinBuildHeight -> m_141937_)
     finalizedBy 'reobfJar'
+    // [v1.0.1] 发布文件名契约 {archivesName}-{modVersion}+{mcVersion}-forge.jar:
+    // + 分隔 mod 版本与 MC 兼容信息(Modrinth 命名习惯);-forge 标记加载器。
+    archiveFileName = "${base.archivesName.get()}-${modVersion}+${mcVersion}-forge.jar"
     manifest {
         // Forge 加载器从 manifest 的 MixinConfigs 发现 mod 的 mixin 配置。
         // 纯 manifest 注册,不依赖 mixin DSL(其来源不明,已弃用)。
         attributes 'MixinConfigs': 'vs2sentinelguardfix.mixins.json'
     }
+}
+
+// ---------------------------------------------------------------------------
+// [v1.0.1] 生产 jar 命名契约 —— reobfJar 输出覆写
+// 取证(2026-10-18,gradle projectsEvaluated 反射内省):MDG legacyforge 把 jar 任务
+// 输出重定向到 build/devlibs(开发用 Mojang 名 jar),发布 jar 由 reobfJar 写
+// build/libs,但输出文件名走插件自有约定(archivesName-version.jar),不继承
+// 上方 jar.archiveFileName —— 发布链 5a 门禁曾在此拦停(+1.20.1-forge 丢失)。
+// 此处显式覆写 reobfJar 输出为发布契约名,与 jar.archiveFileName 同源
+// (modVersion/mcVersion 单一事实源),dev/devlibs 与 prod/libs 产物名一致。
+// 实现类:net.neoforged.moddevgradle.legacyforge.tasks.RemapJar_Decorated
+// ---------------------------------------------------------------------------
+tasks.named('reobfJar') {
+    archiveFile.set(project.file('build/libs/vs2-sentinel-guard-fix-1.0.1+1.20.1-forge.jar'))
 }
 // ---------------------------------------------------------------------------
 // [hotfix 2026-10-17] verifyMixinConfig - 构建期 mixin 配置自洽性守卫

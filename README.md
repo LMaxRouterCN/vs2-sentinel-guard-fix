@@ -83,8 +83,8 @@ Drop the jar in `mods/`. No config, no world data, no persistence. Remove the ja
 
 - JDK 17; Gradle 8.14.3 via wrapper (or `tools/gradle-8.14.3`).
 - Prerequisite: `libs/valkyrienskies-2.4.11.jar` must exist (compileOnly; copy it from your instance's `mods/`). `libs/` is gitignored.
-- `.\gradlew.bat clean build` produces `build/libs/vs2-sentinel-guard-fix-1.0.0.jar`
-- Self-check: `javap -p -c -classpath build/libs/vs2-sentinel-guard-fix-1.0.0.jar com.lmaxrouter.vs2sentinelguardfix.mixin.CompatUtilMixin` — the handler's `getMinBuildHeight` should appear as SRG `m_141937_` (proof of reobfJar remap).
+- `.\gradlew.bat clean build` produces `build/libs/vs2-sentinel-guard-fix-1.0.1+1.20.1-forge.jar`
+- Self-check: `javap -p -c -classpath build/libs/vs2-sentinel-guard-fix-1.0.1+1.20.1-forge.jar com.lmaxrouter.vs2sentinelguardfix.mixin.CompatUtilMixin` — the handler's `getMinBuildHeight` should appear as SRG `m_141937_` (proof of reobfJar remap).
 
 ## License
 
@@ -179,8 +179,8 @@ if (level != null && position.y() < level.getMinBuildHeight()) return (x, minY, 
 
 - JDK 17;Gradle 8.14.3,经 wrapper(或 `tools/gradle-8.14.3`)。
 - 前置:`libs/valkyrienskies-2.4.11.jar` 必须存在(compileOnly;从你实例的 `mods/` 复制)。`libs/` 已被 gitignore。
-- `.\gradlew.bat clean build` 产出 `build/libs/vs2-sentinel-guard-fix-1.0.0.jar`
-- 自检:`javap -p -c -classpath build/libs/vs2-sentinel-guard-fix-1.0.0.jar com.lmaxrouter.vs2sentinelguardfix.mixin.CompatUtilMixin`——handler 中的 `getMinBuildHeight` 应显示为 SRG 名 `m_141937_`(reobfJar 重映射的证据)。
+- `.\gradlew.bat clean build` 产出 `build/libs/vs2-sentinel-guard-fix-1.0.1+1.20.1-forge.jar`
+- 自检:`javap -p -c -classpath build/libs/vs2-sentinel-guard-fix-1.0.1+1.20.1-forge.jar com.lmaxrouter.vs2sentinelguardfix.mixin.CompatUtilMixin`——handler 中的 `getMinBuildHeight` 应显示为 SRG 名 `m_141937_`(reobfJar 重映射的证据)。
 
 ## 许可证
 
