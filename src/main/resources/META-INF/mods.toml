@@ -3,39 +3,39 @@ loaderVersion="[47,)"
 license="MPL-2.0"
 
 [[mods]]
-modId="vs2sentinelfix"
+modId="vs2sentinelguardfix"
 version="1.0.0"
-displayName="VS2 Sentinel Fix"
+displayName="VS2 Sentinel Guard Fix"
 authors="LMaxRouterCN"
 description='''
 Fixes Valkyrien Skies 2 sentinel-coordinate biome queries: occluded ship
-blocks produce an invalid marker BlockPos that gets ship-transformed into
-a ~24M-block drifting ghost query, stalling synchronous BiomeSource mods
-(e.g. Terrain Diffusion) every tick. Guards the shared transform funnel
-CompatUtil.toSameSpaceAs so below-world-floor positions are never
-ship-transformed.
+blocks produce an invalid marker BlockPos(0, minY-1, 0) that gets
+ship-transformed into a ~24M-block drifting ghost query, stalling
+synchronous BiomeSource mods (e.g. Terrain Diffusion) every tick. Guards
+the shared transform funnel CompatUtil.toSameSpaceAs so below-world-floor
+positions are never ship-transformed.
 '''
 
-[[dependencies.vs2sentinelfix]]
+[[dependencies.vs2sentinelguardfix]]
 modId="forge"
 mandatory=true
 versionRange="[47,)"
 ordering="NONE"
 side="BOTH"
 
-[[dependencies.vs2sentinelfix]]
+[[dependencies.vs2sentinelguardfix]]
 modId="minecraft"
 mandatory=true
 versionRange="[1.20.1,1.21)"
 ordering="NONE"
 side="BOTH"
 
-# VS2 版本窗口:下界=受影响且已验证的 2.4.11;上界=2.5(大版本可能重构,
-# mixin 目标签名漂移会让 required=true 直接崩游戏;窗口外拒绝加载更安全,
-# 上游真在 2.5 修了本 bug 时本 mod 正好光荣退役)
-[[dependencies.vs2sentinelfix]]
+# VS2 版本 range 放开(max 拍板,2026-10-17):受影响的 VS2 版本范围未知,
+# 不拿未验证的断言当栅栏;mixin 目标若在上游重构,加载时会响亮地 apply
+# 失败,而不是静默错下去。实测基准:VS2 2.4.11 / MC 1.20.1。
+[[dependencies.vs2sentinelguardfix]]
 modId="valkyrienskies"
 mandatory=true
-versionRange="[2.4.11,2.5)"
+versionRange="[0,)"
 ordering="NONE"
 side="BOTH"

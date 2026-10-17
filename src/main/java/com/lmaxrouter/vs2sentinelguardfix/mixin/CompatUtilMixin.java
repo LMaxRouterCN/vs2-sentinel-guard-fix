@@ -1,4 +1,4 @@
-package com.lmaxrouter.vs2sentinelfix.mixin;
+package com.lmaxrouter.vs2sentinelguardfix.mixin;
 
 import net.minecraft.world.level.Level;
 import org.joml.Vector3d;

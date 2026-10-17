@@ -1,4 +1,4 @@
-package com.lmaxrouter.vs2sentinelfix;
+package com.lmaxrouter.vs2sentinelguardfix;
 
 import net.minecraftforge.fml.common.Mod;
 import org.slf4j.Logger;
@@ -12,13 +12,13 @@ import org.slf4j.LoggerFactory;
  *   1. 给 Forge 一个 @Mod 入口(FML 需要,否则 mod jar 不被当作 mod 加载)
  *   2. 留一行启动日志,方便在 latest.log 里确认本 mod 确实加载了
  */
-@Mod("vs2sentinelfix")
-public class VS2SentinelFix {
+@Mod("vs2sentinelguardfix")
+public class VS2SentinelGuardFix {
 
-    private static final Logger LOGGER = LoggerFactory.getLogger("vs2sentinelfix");
+    private static final Logger LOGGER = LoggerFactory.getLogger("vs2sentinelguardfix");
 
-    public VS2SentinelFix() {
+    public VS2SentinelGuardFix() {
         // mixin 生效与否看这行之后游戏是否还卡;守卫本身零日志(每 tick 触发,不打)
-        LOGGER.info("VS2 Sentinel Fix loaded - CompatUtil.toSameSpaceAs guard active");
+        LOGGER.info("VS2 Sentinel Guard Fix loaded - CompatUtil.toSameSpaceAs guard active");
     }
 }

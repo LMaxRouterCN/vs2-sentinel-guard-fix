@@ -1,45 +1,90 @@
-# VS2 Sentinel Fix
+# VS2 Sentinel Guard Fix
 
-修复 Valkyrien Skies 2(2.4.11)world_weather 哨兵坐标 bug:被世界地形"遮挡"的船方块返回哨兵 BlockPos(0, minY-1, 0),下游无条件套船矩阵变换,产出约 2400 万格外、随船逐 tick 漂移的幽灵生物群系查询点;同步推理型 BiomeSource(Terrain Diffusion)缓存永远 miss,每 tick 主线程推理 3.5-5.4 秒,TPS 跌至 0.18,无自然终点。与天气无关。完整案件卷宗:../vs-td-investigation/CASE-REPORT.md(v3)。
+Fixes a Valkyrien Skies 2 bug where a leaked sentinel coordinate `BlockPos(0, minY-1, 0)` is
+unconditionally ship-transformed into a ~24-million-block drifting ghost biome query point,
+freezing any server that runs a synchronous-inference BiomeSource mod (e.g. Terrain Diffusion)
+at TPS ~0.18.
 
-## 修复原理(一行守卫,漏斗口)
+## Symptom
 
-- 注入 org.valkyrienskies.mod.common.CompatUtil#toSameSpaceAs(Level, Vector3dc, Ship, Ship) —— VS2 三个 weather wrap(occlude / useBiomeAtWorldPos / usePrecipitationAtWorldPos)的公共变换漏斗
-- HEAD cancellable 守卫:level != null && position.y() < level.getMinBuildHeight() → 跳过船变换,返回 (x, minY, z)(y 钳到世界地板)
-- 不变式:真实方块坐标恒 y >= minBuildHeight;低于地板的只能是哨兵/无效坐标 → 零误伤;maxY 侧不设防(船高于世界建筑上限是 VS2 支持的合法场景)
-- 效果:哨兵落点稳定为 (0, minY, 0),TD 缓存恒命中,TPS 恢复
+- TPS collapses to ~0.2 roughly 75-80 seconds after world load, exactly when a dock /
+  shipyard chunk starts ticking. It never resolves on its own — only logging out or walking
+  far enough away (shipyard unload) stops it.
+- Spark / stack dump shows the main thread parked inside `BiomeSource.getNoiseBiome`
+  for 3.5-5.4 s per tick, on a coordinate ~24 M blocks away that moves slightly every tick.
+- Dead ends that do **not** help: `/weather clear` (this is not a weather bug — verified
+  against level.dat), removing rain mods, waiting it out.
+- Affects any ship that is hollow, overhanging, or buried. Vanilla-only worlds never notice.
 
-## 部署 / 卸载
+## The `BlockPos(0, minY-1, 0)` — where it comes from
 
-- 部署:把 build/libs/vs2-sentinel-fix-1.0.1.jar 放进 mods 目录(当前已部署一份到实例 mods)
-- 卸载:删除该 jar 即可,无残留
-- 版本窗口:valkyrienskies [2.4.11, 2.5) 强制依赖;窗口外 Forge 拒绝加载本 mod(required mixin 遇上游签名漂移会崩游戏,拒载更安全;上游 2.5 修复本 bug 后本 mod 光荣退役)
+Valkyrien Skies 2's weather system wraps every biome and precipitation query with an
+occlusion test: "is this block's view of the sky actually blocked by the world?" For ship
+blocks whose transformed position falls below the terrain (hollow / overhanging / buried
+ships; y ~ -134 in practice), the occlusion test concludes "this block cannot see the sky"
+and returns `BlockPos(0, minY-1, 0)` — `minY` being the world's minimum build height.
 
-## 游戏内验证
+## Why Valkyrien wrote it
 
-1. latest.log 搜索 "VS2 Sentinel Fix loaded"(mod 构造器输出的一行)
-2. 进受影响存档,走近船坞(进世界约 75-80 秒后船坞区块进入 ticking),观察 TPS(F3 或 spark):应稳定 20
-3. 反证:移除本 jar 重测,TPS 回落至 0.18 一带
+It is a textbook **sentinel value**: a magic coordinate whose only job is to mean
+"no real answer — caller, skip this query." The pattern itself is ordinary engineering
+practice; the intent was clearly for the caller to recognize the marker and not use it.
 
-## 已知良性代价
+## Where it breaks
 
-哨兵钳到 (0, minY, 0):若该世界 chunk(0,0) 不在出生点常载范围,首次查询会同步加载一次 chunk(百毫秒级,一次性);此后 BiomeManager / TD 缓存命中。
+No code downstream ever checks for the sentinel. The very next step in VS2's own pipeline —
+the shared transform funnel `CompatUtil.toSameSpaceAs` — unconditionally applies the ship's
+rotation matrix to whatever position it is handed:
 
-## 版本历史
+    out = c_world + R * (-c_ship)
 
-- 1.0.1:修复进世界崩溃 —— mixin @Inject handler 参数捕获是"全有或全无"规则,v1.0.0 只捕获 (Level, Vector3dc) 缺两个 Ship,运行时 mixin 应用报 Invalid descriptor(编译期 AP 0.8.5 在 remap=false 下不验 handler 元数,未拦截)。handler 改为全参捕获。
-- 1.0.0:初版守卫。
+For a real block coordinate this lands back on the actual block. For the sentinel
+`(0, minY-1, 0)` it produces a point roughly `|c_ship| ~ 24 M` blocks from the world origin
+that **moves every tick** as the ship rocks. Every tick, `BiomeManager` is then asked to
+resolve a biome at that drifting garbage coordinate.
 
-## 构建(复现)
+- Vanilla BiomeSources answer instantly from noise, so pure-vanilla setups never notice.
+- Synchronous-inference BiomeSource mods (Terrain Diffusion: ~5 s of GPU inference per
+  uncached region) park the main thread inside `getNoiseBiome` once per tick, forever.
+  TPS drops to ~0.18. No natural end.
 
-- JDK 17(E:\Java\Zulu\zulu-17),Windows
-- 前置:libs/valkyrienskies-2.4.11.jar 必须存在 —— mixin 注解处理器编译期校验 @Mixin 目标类须在 classpath(来源:实例 mods 目录里的 VS2 2.4.11 jar;compileOnly,不进产物)。libs/ 已 gitignore,克隆后需手动放置
-- 命令:.\gradlew.bat build(8.14.3 发行包已装入本机 dists 缓存;或直接用 tools\gradle-8.14.3\bin\gradle.bat)
-- 网络:插件与依赖走 Gradle 插件门户 / maven.minecraftforge.net / Sponge / Maven Central。注意:本机 maven.neoforged.net 持续不可达,故 ModDevGradle 钉在 2.0.116(本机缓存有配套 neoform-runtime 1.0.43 + AutoRenamingTool 2.0.4 + MC 1.20.1 素材全套);升级 MDG 版本前先确认该主机可达或缓存命中
-- 产物自检:javap -p -c -classpath build/libs/vs2-sentinel-fix-1.0.1.jar com.lmaxrouter.vs2sentinelfix.mixin.CompatUtilMixin —— handler 内 getMinBuildHeight 应显示为 SRG 名 m_141937_(reobfJar 重映射成功的标志);handler 签名应含全部 4 个目标参数
-- tools/(gradle 发行包)与 libs/ 均已 gitignore,不入库
+## The fix
 
-## 案件关联
+One guard, injected at the shared transform funnel `CompatUtil.toSameSpaceAs` — the single
+choke point that all three VS2 weather wrappers flow through:
 
-- 根因、证据链、备选修复方案:../vs-td-investigation/CASE-REPORT.md
-- 本 mod 只做 VS2 侧根治;TD 侧防御刀(getNoiseBiome 主线程熔断)与上游 issue 起草为待决事项
+    if (level != null && position.y() < level.getMinBuildHeight())
+        return (x, minY, z); // clamp to world floor, skip the ship matrix
+
+Zero false positives: every legitimate block coordinate satisfies `y >= minBuildHeight`;
+only the sentinel (and other invalid values) fall below it. Sentinel queries now resolve to
+a fixed, cacheable point `(0, minY, 0)` instead of a 24 M-block moving target — the cache
+hits, the main thread never parks, TPS stays at 20.
+
+## Version & maintenance
+
+- Tested: Valkyrien Skies 2.4.11 on Minecraft 1.20.1, Forge 47.x.
+- Other VS2 / MC versions: untested. The VS2 dependency range is intentionally left open —
+  we cannot confirm which versions carry the sentinel leak. If the mixin target signature
+  ever changes upstream, the mod fails loudly at apply time rather than silently misbehaving.
+- This is a targeted bug fix, not a feature mod. No updates are planned beyond keeping the
+  fix buildable; if VS2 upstream fixes the sentinel leak, this mod retires.
+
+## Install / uninstall
+
+Drop the jar in `mods/`. No config, no world data, no persistence. Remove the jar to
+uninstall — zero residue.
+
+## Build
+
+- JDK 17; Gradle 8.14.3 via wrapper (or `tools/gradle-8.14.3`).
+- Prerequisite: `libs/valkyrienskies-2.4.11.jar` must exist (compileOnly; copy it from your
+  instance's `mods/`). `libs/` is gitignored.
+- `.\gradlew.bat clean build` produces `build/libs/vs2-sentinel-guard-fix-1.0.0.jar`
+- Self-check: `javap -p -c -classpath build/libs/vs2-sentinel-guard-fix-1.0.0.jar
+  com.lmaxrouter.vs2sentinelguardfix.mixin.CompatUtilMixin` — the handler's
+  `getMinBuildHeight` should appear as SRG `m_141937_` (proof of reobfJar remap).
+
+## License
+
+MPL-2.0.
