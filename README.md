@@ -2,17 +2,29 @@
 
 English | [简体中文](#vs2-哨兵守卫修复)
 
-Fixes a Valkyrien Skies 2 bug where a leaked sentinel coordinate `BlockPos(0, minY-1, 0)` is
-unconditionally ship-transformed into a ~24-million-block drifting ghost biome query point,
-freezing any server that runs a synchronous-inference BiomeSource mod (e.g. Terrain Diffusion)
-at TPS ~0.18.
+Fixes a Valkyrien Skies 2 bug where a leaked sentinel coordinate `BlockPos(0, minY-1, 0)` is unconditionally ship-transformed into a ~24-million-block ghost biome query point that shifts every tick — and that query keeps being sent to the world generator, tick after tick.
+
+The query blocks the main thread until it returns.
+
+In vanilla, the world generator is noise-based: queries are cheap and instant, so the problem stays buried — easy to never take seriously.
+
+But swap the generator for another kind, the query becomes expensive and slow, and the problem surfaces.
+
+Terrain Diffusion is one such generator. VS2 sends TD the query; TD starts a fresh GPU inference (the query coordinate is absurd — it can never hit TD's cache, and it is absurd anew every tick, compounding the stall), then replies to VS2.
+
+On my hardware, one such inference takes ~5 s — meaning the per-tick cost goes from 50 ms to 5000+ ms, a hundredfold TPS drop.
+
+That "merely slow" outcome only holds if the generator is robust enough to correctly handle a coordinate tens of millions of blocks out; a less robust generator will freeze or crash instead.
 
 ## Symptom
 
-- TPS collapses to ~0.2 roughly 75-80 seconds after world load, exactly when a dock / shipyard chunk starts ticking. It never resolves on its own — only logging out or walking far enough away (shipyard unload) stops it.
-- Spark / stack dump shows the main thread parked inside `BiomeSource.getNoiseBiome` for 3.5-5.4 s per tick, on a coordinate ~24 M blocks away that moves slightly every tick.
-- Dead ends that do **not** help: `/weather clear` (this is not a weather bug — verified against level.dat), removing rain mods, waiting it out.
-- Affects any ship that is hollow, overhanging, or buried. Vanilla-only worlds never notice.
+Spark shows the main thread parked inside `getNoiseBiome`, with VS2 calling into the world generator.
+
+Concretely: in a normal world, mine deep wanderlite ore (`vs_clockwork:wanderlite_deepslate_ore`) underground — the ore becomes a physics ship > ends up covered by blocks > the bug triggers.
+
+Any physics entity created in a block-covered spot — or later covered by blocks — triggers the bug.
+
+In theory, any hollow, overhanging, or buried ship can trigger it.
 
 ## The `BlockPos(0, minY-1, 0)` — where it comes from
 
@@ -26,9 +38,9 @@ It is a textbook **sentinel value**: a magic coordinate whose only job is to mea
 
 No code downstream ever checks for the sentinel. The very next step in VS2's own pipeline — the shared transform funnel `CompatUtil.toSameSpaceAs` — unconditionally applies the ship's rotation matrix to whatever position it is handed:
 
-
-text
+```text
 out = c_world + R * (-c_ship)
+```
 
 For a real block coordinate this lands back on the actual block. For the sentinel `(0, minY-1, 0)` it produces a point roughly `|c_ship| ~ 24 M` blocks from the world origin that **moves every tick** as the ship rocks.
 
@@ -41,13 +53,21 @@ Every tick, `BiomeManager` is then asked to resolve a biome at that drifting gar
 
 One guard, injected at the shared transform funnel `CompatUtil.toSameSpaceAs` — the single choke point that all three VS2 weather wrappers flow through:
 
-
-java
+```java
 if (level != null && position.y() < level.getMinBuildHeight()) return (x, minY, z); // clamp to world floor, skip the ship matrix
+```
 
 Zero false positives: every legitimate block coordinate satisfies `y >= minBuildHeight`; only the sentinel (and other invalid values) fall below it.
 
-Sentinel queries now resolve to a fixed, cacheable point `(0, minY, 0)` instead of a 24 M-block moving target — the cache hits, the main thread never parks, TPS stays at 20.
+Sentinel queries now resolve to a fixed point `(0, minY, 0)` instead of a 24 M-block moving target — if the biome-source mod has a cache, it hits; the main thread never parks, TPS stays at 20.
+
+## Drawbacks
+
+This fix does not stop the query — and "what biome is a block-covered physics entity in" is not inherently meaningless. VS2 assumes it is; that is VS2's problem, and I have no intention of touching it.
+
+All I do is relocate the query to `(0, minY, 0)`. Consequence: every block-covered physics entity now shares the biome at `(0, minY, 0)` — if the biome there snows, it snows on every block-covered physics entity.
+
+The root cause still lives in VS2. That codebase genuinely earns the name "mountain of shit" — it needs a ground-up rework, but I (for now) have no intention of touching it.
 
 ## Version & maintenance
 
@@ -76,29 +96,29 @@ MPL-2.0.
 
 [English](#vs2-sentinel-guard-fix) | 简体中文
 
-修复 Valkyrien Skies 2 的一个 bug:泄漏的哨兵坐标 `BlockPos(0, minY-1, 0)` 被无条件执行飞船坐标变换,产生一个约 2400 万格之外、每 tick 改变位置的生物群系查询点,并持续向世界生成器发送查询请求,
+修复 Valkyrien Skies 2 的一个 bug:泄漏的哨兵坐标 `BlockPos(0, minY-1, 0)` 被无条件执行飞船坐标变换,产生一个约 2400 万格之外、每 tick 改变位置的生物群系查询点,并持续向世界生成器发送查询请求。
 
-这个查询请求一般情况下会卡住主线程,直到结果返回
+这个查询请求一般情况下会卡住主线程,直到结果返回。
 
-在原版中,原版的世界生成器基于噪声,查询是廉价的,很快,所以这个问题不突出,也一般不会让人觉得要正视他
+在原版中,原版的世界生成器基于噪声,查询是廉价的,很快的,所以这个问题不突出,也一般不会让人觉得要正视它。
 
-但如果世界生成器被换成了另一种,查询变得昂贵且耗时,问题就会凸显出来
+但如果世界生成器被换成了另一种,查询变得昂贵且耗时,问题就会凸显出来。
 
-terraindiffusion就是其中一种,所以vs2向td发送查询请求,td就开始调用gpu跑一次全新的推理(这个查询坐标极其离谱,不可能命中td的缓存,而且每一次都离谱,加剧了卡顿),然后给vs2回复,
+Terrain Diffusion 就是其中一种,所以 VS2 向 TD 发送查询请求,TD 就开始调用 GPU 跑一次全新的推理(这个查询坐标极其离谱,不可能命中 TD 的缓存,而且每一次都离谱,加剧了卡顿),然后给 VS2 回复。
 
-在我的硬件环境下,这次推理要花5秒,也就是说,每次tick都由50ms变成了5000+ms,tps直接下降100倍
+在我的硬件环境下,这次推理要花 5 秒,也就是说,每次 tick 都由 50ms 变成了 5000+ms,TPS 直接下降 100 倍。
 
-"慢"只建立在这个世界生成器够稳定且强壮,能正确处理上千万格坐标的情况下,如果世界生成器不够强壮,就会表现为卡死和崩溃
+"慢"只建立在这个世界生成器够稳定且强壮,能正确处理上千万格坐标的情况下,如果世界生成器不够强壮,就会表现为卡死和崩溃。
 
 ## 症状
 
-Spark显示主线程卡在 `getNoiseBiome` 内,由vs调用世界生成器
+Spark 显示主线程卡在 `getNoiseBiome` 内,由 VS2 调用世界生成器。
 
-在正常世界中的地底挖掘深层漫游矿石`vs_clockwork:wanderlite_deepslate_ore`,矿石物理化>满足被覆盖条件>触发bug
+在正常世界中的地底挖掘深层漫游矿石`vs_clockwork:wanderlite_deepslate_ore`,矿石物理化>满足被覆盖条件>触发bug。
 
-只要在被方块覆盖的地方创建物理实体,或者让物理实体被方块覆盖,都会触发bug
+只要在被方块覆盖的地方创建物理实体,或者让物理实体被方块覆盖,都会触发bug。
 
-理论上来说任何中空、悬挑或被掩埋的飞船都会触发
+理论上来说任何中空、悬挑或被掩埋的飞船都会触发。
 
 ## `BlockPos(0, minY-1, 0)` 从哪来
 
@@ -112,9 +132,9 @@ VS2 的天气系统给每个生物群系与降水查询都包了一层遮挡测�
 
 下游没有任何代码检查这个哨兵。VS2 自己管线的下一步——共享变换漏斗 `CompatUtil.toSameSpaceAs`——对手上的任何位置无条件应用飞船旋转矩阵:
 
-
-text
+```text
 out = c_world + R * (-c_ship)
+```
 
 对真实方块坐标,结果落回实际方块;对哨兵 `(0, minY-1, 0)`,它产生一个距世界原点约 `|c_ship| ~ 2400 万`格的点,并**随飞船摇晃逐 tick 移动**。
 
@@ -127,9 +147,9 @@ out = c_world + R * (-c_ship)
 
 一道守卫,注入共享变换漏斗 `CompatUtil.toSameSpaceAs`——VS2 三个天气包装器共同流经的唯一咽喉:
 
-
-java
+```java
 if (level != null && position.y() < level.getMinBuildHeight()) return (x, minY, z); // 钳到世界地板,跳过飞船矩阵
+```
 
 零误报:每个合法方块坐标都满足 `y >= minBuildHeight`,只有哨兵(及其他非法值)低于它。
 
@@ -137,13 +157,13 @@ if (level != null && position.y() < level.getMinBuildHeight()) return (x, minY, 
 
 ## 缺点
 
-他没有停止查询,而且查询"被方块覆盖的物理实体的所处群系"也并不是毫无意义的,vs假定这是无意义的,这属于vs的问题,我也不想碰这玩意
+它没有停止查询,而且查询"被方块覆盖的物理实体的所处群系"也并不是毫无意义的,VS2 假定这是无意义的,这属于 VS2 的问题,我也不想碰这玩意。
 
-我只是把查询转移到了(0, minY, 0),也就是说,现在所有被方块覆盖的物理实体,群系都是(0, minY, 0)位置的群系,如果这个位置的群系会下雪,所有被方块覆盖的物理实体上都会下雪
+我只是把查询转移到了 (0, minY, 0),也就是说,现在所有被方块覆盖的物理实体,群系都是 (0, minY, 0) 位置的群系,如果这个位置的群系会下雪,所有被方块覆盖的物理实体上都会下雪。
 
-问题根源还在vs
+问题根源还在 VS2。
 
-屎山名副其实,这套玩意就是很垃圾,需要大干一场,但是我(暂时)不想碰
+屎山名副其实,这套玩意就是很垃圾,需要大干一场,但是我(暂时)不想碰。
 
 ## 版本与维护
 
